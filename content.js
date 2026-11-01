@@ -8,7 +8,7 @@
   // enter_choose_address; don't interfere there.
   if (/\/giveaway\/enter/.test(location.pathname)) return;
 
-  const SEL = 'a[href*="/giveaway/enter_choose_address/"]';
+  const SEL = 'a[href*="/giveaway/enter_choose_address/"], a[href*="/giveaway/enter_kindle_giveaway/"]';
 
   // ⚡ marker via injected CSS — no DOM node changes, so React won't choke.
   const style = document.createElement("style");
@@ -41,7 +41,7 @@
   }
 
   function titleFrom(href, el) {
-    const m = href.match(/enter_choose_address\/(\d+)(?:-([^/?#]+))?/);
+    const m = href.match(/(?:enter_choose_address|enter_kindle_giveaway)\/(\d+)(?:-([^/?#]+))?/);
     if (m && m[2]) {
       return decodeURIComponent(m[2]).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     }
