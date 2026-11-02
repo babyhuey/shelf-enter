@@ -79,6 +79,7 @@ async function parseTerms(html, baseUrl) {
 function normalizeUrl(u) {
   try {
     const url = new URL(u, "https://www.goodreads.com");
+    url.hostname = "www.goodreads.com";
     url.hash = "";
     return url.toString();
   } catch {
@@ -126,6 +127,14 @@ async function locateEntry(startUrl) {
 }
 
 async function enterGiveaway(job, settings) {
+  // Kindle giveaways have no address step: the enter page is the terms page.
+  if (/\/giveaway\/enter_kindle_giveaway\//.test(job.url)) {
+    const { res, text } = await fetchText(job.url);
+    if (!res.ok) throw new Error(`Kindle entry page responded ${res.status}`);
+    job.address = "Kindle";
+    return submitTerms(text, res.url, null);
+  }
+
   const parsed = await locateEntry(job.url);
   if (!parsed || !parsed.found) {
     throw new Error(parsed?.reason || "Could not find entry links (already entered, ended, or login required?)");
@@ -147,10 +156,13 @@ async function enterGiveaway(job, settings) {
   });
   const html1 = await res1.text();
   if (!res1.ok) throw new Error(`Step 1 responded ${res1.status}`);
-  if (/sign up for goodreads|already a member\?/i.test(html1)) throw new Error("Not logged in to Goodreads.");
+  return submitTerms(html1, res1.url, parsed.csrf);
+}
 
-  // Step 2: agree to terms + submit the confirm form.
-  const terms = await parseTerms(html1, res1.url);
+// Step 2: agree to terms + submit the confirm form.
+async function submitTerms(html1, pageUrl, csrf) {
+  if (/sign up for goodreads|already a member\?/i.test(html1)) throw new Error("Not logged in to Goodreads.");
+  const terms = await parseTerms(html1, pageUrl);
   if (!terms || !terms.found) {
     throw new Error(terms?.reason || "Could not find the terms/confirm form.");
   }
@@ -158,7 +170,7 @@ async function enterGiveaway(job, settings) {
   for (const f of terms.fields) if (f.name) body2.append(f.name, f.value ?? "");
   for (const a of terms.agreements || []) if (a.name) body2.append(a.name, a.value || "1");
 
-  const token2 = terms.token || parsed.csrf;
+  const token2 = terms.token || csrf;
   const res2 = await fetch(terms.action, {
     method: (terms.method || "POST").toUpperCase(),
     credentials: "include",

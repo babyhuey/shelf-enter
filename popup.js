@@ -7,7 +7,7 @@ function send(msg) {
 
 // The queued URL is the enter page; link the title to the giveaway show page.
 function showUrl(url) {
-  return (url || "").replace("/giveaway/enter_choose_address/", "/giveaway/show/");
+  return (url || "").replace(/\/giveaway\/(enter_choose_address|enter_kindle_giveaway)\//, "/giveaway/show/");
 }
 
 function fmtTime(ts) {
