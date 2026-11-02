@@ -12,7 +12,7 @@
 
   // ⚡ marker via injected CSS — no DOM node changes, so React won't choke.
   const style = document.createElement("style");
-  style.textContent = `${SEL}::before { content: "⚡ "; }`;
+  style.textContent = `:is(${SEL})::before { content: "⚡ "; }`;
   (document.head || document.documentElement).appendChild(style);
 
   let toast;
