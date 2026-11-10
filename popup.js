@@ -67,6 +67,13 @@ function render(queue) {
     meta.appendChild(right);
     li.appendChild(meta);
 
+    if (job.shelf && job.status === "success") {
+      const note = document.createElement("div");
+      note.className = job.shelf.startsWith("Couldn't") ? "err" : "note";
+      note.textContent = job.shelf;
+      li.appendChild(note);
+    }
+
     if (job.error) {
       const err = document.createElement("div");
       err.className = "err";

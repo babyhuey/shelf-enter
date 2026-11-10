@@ -55,6 +55,12 @@
     <label for="maxRetries">Max retries per giveaway</label>
     <input type="number" id="maxRetries" min="0" max="5" />
 
+    <label><input type="checkbox" id="removeFromWantToRead" /> Remove entered books from my Want to Read shelf</label>
+    <div class="hint">
+      Goodreads adds every giveaway book to Want to Read. When checked, the book is removed after
+      entering, unless it was already on Want to Read.
+    </div>
+
     <div>
       <button id="save">Save</button>
       <span id="saved" hidden>Saved ✓</span>

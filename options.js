@@ -3,6 +3,7 @@ const DEFAULTS = {
   concurrency: 2,
   delayMs: 1500,
   maxRetries: 2,
+  removeFromWantToRead: false,
 };
 
 const fields = ["preferredAddress", "concurrency", "delayMs", "maxRetries"];
@@ -11,6 +12,7 @@ async function load() {
   const { gg_settings } = await chrome.storage.local.get("gg_settings");
   const s = { ...DEFAULTS, ...(gg_settings || {}) };
   for (const f of fields) document.getElementById(f).value = s[f];
+  document.getElementById("removeFromWantToRead").checked = s.removeFromWantToRead;
 }
 
 document.getElementById("save").onclick = async () => {
@@ -19,6 +21,7 @@ document.getElementById("save").onclick = async () => {
     concurrency: clamp(parseInt(document.getElementById("concurrency").value, 10), 1, 5, 2),
     delayMs: clamp(parseInt(document.getElementById("delayMs").value, 10), 0, 60000, 1500),
     maxRetries: clamp(parseInt(document.getElementById("maxRetries").value, 10), 0, 5, 2),
+    removeFromWantToRead: document.getElementById("removeFromWantToRead").checked,
   };
   await chrome.storage.local.set({ gg_settings: s });
   const saved = document.getElementById("saved");

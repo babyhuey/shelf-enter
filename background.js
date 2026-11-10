@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
   concurrency: 2,
   delayMs: 1500, // polite minimum gap between starting jobs
   maxRetries: 2,
+  removeFromWantToRead: false, // undo the Want to Read shelving Goodreads does on entry
 };
 
 let scheduling = false;
@@ -187,6 +188,74 @@ async function submitTerms(html1, pageUrl, csrf) {
   return true;
 }
 
+// ---------- Want to Read cleanup ----------
+
+// Goodreads shelves every giveaway book as Want to Read on entry. Logged-in
+// pages link other books too (sidebar, header), so read the id from the
+// giveaway's own preview block.
+async function giveawayBookId(url) {
+  const m = url.match(/\/giveaway\/(?:show|enter_choose_address|enter_kindle_giveaway)\/(\d+)/);
+  if (!m) return null;
+  const { text } = await fetchText(`https://www.goodreads.com/giveaway/show/${m[1]}`);
+  const start = text.indexOf("giveawayPreviewBookContainer");
+  if (start === -1) return null;
+  return text.slice(start).match(/\/book\/show\/(\d+)/)?.[1] || null;
+}
+
+// The newest page of your to-read list. Each row has a remove link
+// /review/destroy/{bookId}. Checking the same newest-first page before and
+// after entering means a book that was already on the shelf is never removed:
+// it is either on this page both times or on neither.
+async function recentToRead(bookId) {
+  const { res, text } = await fetchText(
+    "https://www.goodreads.com/review/list?shelf=to-read&sort=date_added&order=d"
+  );
+  if (!res.ok) throw new Error(`to-read list responded ${res.status}`);
+  const csrf =
+    text.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/)?.[1] ||
+    text.match(/<meta\s+content="([^"]+)"\s+name="csrf-token"/)?.[1] ||
+    null;
+  return { shelved: new RegExp(`/review/destroy/${bookId}\\b`).test(text), csrf };
+}
+
+async function shelfBeforeEntry(url) {
+  const bookId = await giveawayBookId(url);
+  if (!bookId) throw new Error("couldn't find the giveaway's book");
+  return { bookId, wasShelved: (await recentToRead(bookId)).shelved };
+}
+
+// Removes the book only if the giveaway put it on your shelves. Never throws:
+// the entry has already succeeded, so failures become a note in the popup.
+async function removeIfAdded(before) {
+  try {
+    if (before.error) throw before.error;
+    if (before.wasShelved) return "Kept on Want to Read (already there before entering)";
+    // Goodreads may shelve the book a moment after the entry registers.
+    let after;
+    for (let i = 0; i < 4; i++) {
+      if (i) await sleep(2000);
+      after = await recentToRead(before.bookId);
+      if (after.shelved) break;
+    }
+    if (!after.shelved) return `Couldn't find book ${before.bookId} on your to-read list to remove`;
+    if (!after.csrf) throw new Error("no CSRF token on the shelf page");
+    const res = await fetch(`https://www.goodreads.com/review/destroy/${before.bookId}`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRF-Token": after.csrf,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: new URLSearchParams({ authenticity_token: after.csrf }).toString(),
+    });
+    if (!res.ok && res.status !== 404) throw new Error(`remove responded ${res.status}`);
+    return "Removed from Want to Read";
+  } catch (e) {
+    return `Couldn't remove from Want to Read: ${e?.message || e}`;
+  }
+}
+
 // ---------- scheduler ----------
 
 async function schedule() {
@@ -225,12 +294,17 @@ async function runJob(jobId, settings) {
   let success = false;
   let error = null;
   let address = null;
+  let shelf = null;
   try {
     const q = await getQueue();
     const job = q.find((j) => j.id === jobId);
     if (!job) return;
+    const before = settings.removeFromWantToRead
+      ? await shelfBeforeEntry(job.url).catch((e) => ({ error: e }))
+      : null;
     await enterGiveaway(job, settings);
     address = job.address || null;
+    if (before) shelf = await removeIfAdded(before);
     success = true;
   } catch (e) {
     error = String(e?.message || e);
@@ -242,6 +316,7 @@ async function runJob(jobId, settings) {
     if (success) {
       job.status = "success";
       job.address = address;
+      job.shelf = shelf;
       job.finishedAt = Date.now();
       job.error = null;
     } else {

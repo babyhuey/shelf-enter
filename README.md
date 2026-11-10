@@ -30,6 +30,7 @@ logged-in session. No Selenium, no stored credentials.
 | Concurrent entries | How many entries process at once (keep low, 1–2). |
 | Min delay between entries | Throttle so you don't hammer Goodreads. |
 | Max retries | Retry attempts per giveaway on transient failure. |
+| Remove entered books from Want to Read | Goodreads adds every giveaway book to your Want to Read shelf. When checked, the book is removed after a successful entry, unless it was already on your Want to Read shelf. Off by default. |
 
 ## how it works
 
